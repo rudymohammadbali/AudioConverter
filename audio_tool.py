@@ -1,143 +1,89 @@
 import os
-import subprocess
-from pathlib import Path
+
+import ffmpeg
+
+FORMAT_OPTIONS = {
+    'mp3': {
+        'codecs': ['libmp3lame'],
+        'bitrates': ['128k', '192k', '256k', '320k'],
+        'sample_rates': [44100, 48000],
+        'channels': [1, 2],
+        'volume': [0.5, 1.0, 1.5]
+    },
+    'aac': {
+        'codecs': ['aac'],
+        'bitrates': ['128k', '192k', '256k'],
+        'sample_rates': [44100, 48000],
+        'channels': [1, 2],
+        'volume': [0.5, 1.0, 1.5]
+    },
+    'wav': {
+        'codecs': ['pcm_s16le'],
+        'bitrates': ['256k', '512k', '1024k'],
+        'sample_rates': [44100, 48000, 96000],
+        'channels': [1, 2],
+        'volume': [0.5, 1.0, 1.5]
+    },
+    'flac': {
+        'codecs': ['flac'],
+        'bitrates': ['512k', '1024k', '2048k'],
+        'sample_rates': [44100, 48000, 96000],
+        'channels': [1, 2],
+        'volume': [0.5, 1.0, 1.5]
+    },
+    'm4a': {
+        'codecs': ['aac'],
+        'bitrates': ['128k', '192k', '256k'],
+        'sample_rates': [44100, 48000],
+        'channels': [1, 2],
+        'volume': [0.5, 1.0, 1.5]
+    },
+    'wma': {
+        'codecs': ['wmav2'],
+        'bitrates': ['128k', '192k', '256k'],
+        'sample_rates': [44100, 48000],
+        'channels': [1, 2],
+        'volume': [0.5, 1.0, 1.5]
+    }
+}
 
 
-class UnsupportedAudioFormatError(Exception):
-    def __init__(self, format_name: str):
-        super().__init__(f"Unsupported audio format: {format_name}")
+def get_valid_option(options, key, default):
+    return options.get(key) if options.get(key) in default else default[0]
 
 
-def path_exists(path: str) -> bool:
-    return os.path.exists(path)
+def convert_audio(input_file: str, output_file: str, **kwargs) -> None:
+    filename, extension = os.path.splitext(os.path.basename(input_file))
+    format_key = extension[1:]
+    format_opts = FORMAT_OPTIONS.get(format_key, {})
 
+    codec = get_valid_option(kwargs, 'codec', format_opts.get('codecs', []))
+    bit_rate = get_valid_option(kwargs, 'bit_rate', format_opts.get('bitrates', []))
+    sample_rate = get_valid_option(kwargs, 'sample_rate', format_opts.get('sample_rates', []))
+    channels = get_valid_option(kwargs, 'channels', format_opts.get('channels', []))
+    volume = get_valid_option(kwargs, 'volume', format_opts.get('volume', []))
 
-def is_file(path: str) -> bool:
-    return os.path.isfile(path)
-
-
-def extract_options(options: dict) -> dict:
-    """
-        Extracts valid audio conversion options from the given dictionary.
-
-        Args:
-            options (dict): A dictionary containing various conversion options.
-
-        Returns:
-            dict: A filtered dictionary containing valid options for audio conversion.
-
-        Example:
-            options = {
-                "audio_codec": "aac",
-                "bitrate": 192,
-                "sample_rates": "48000",
-                "channel": "stereo",
-            }
-            valid_options = extract_options(options)
-            # valid_options will contain only the valid options based on predefined lists.
-        """
-    valid_options = {}
-
-    audio_codec_list = ["copy", "aac", "ac3", "flac", "libmp3lame", "libopus"]
-    bitrate = range(128, 320)
-    channel = {"stereo": 2, "mono": 1}
-    sample_rates = ["8000", "11025", "16000", "22050", "32000", "44100", "48000", "88200", "96000"]
-    volume = range(-50, 100)
-
-    for key, value in options.items():
-        # Audio options
-        if key == "audio_codec" and value in audio_codec_list:
-            valid_options[key] = value
-        elif key == "bitrate" and value in bitrate:
-            valid_options[key] = f"{value}k"
-        elif key == "channel" and value in channel:
-            valid_options[key] = str(channel[value])
-        elif key == "sample_rates" and value in sample_rates:
-            valid_options[key] = value
-        elif key == "volume" and value in volume:
-            valid_options[key] = str(value)
-
-    return valid_options
-
-
-def audio_converter(input_path: str, output_path: str, target_format: str, options: dict) -> bool:
-    """
-        Converts an audio file from one format to another using FFmpeg.
-
-        Args:
-            input_path (str): Path to the input audio file.
-            output_path (str): Path to the output folder where the converted audio will be saved.
-            target_format (str): Target audio format (e.g., "mp3", "wav", "flac").
-            options (dict): Dictionary containing audio conversion options.
-
-        Raises:
-            FileExistsError: If the input file does not exist.
-            NotADirectoryError: If the output folder does not exist.
-            UnsupportedVideoFormatError: If the target format is not supported.
-
-        Returns:
-            bool: True if conversion successful otherwise False.
-
-        Example:
-            options = {
-                "audio_codec": "aac",
-                "bitrate": 192,
-                "sample_rates": "48000",
-                "channel": "stereo",
-            }
-            audio_converter("input.wav", "output_folder", "mp3", options)
-        """
-    if not is_file(input_path):
-        raise FileExistsError(f"File {input_path} does not exists.")
-
-    if not path_exists(output_path):
-        raise NotADirectoryError(f"Output folder {output_path} does not exists.")
-
-    target_format = target_format.lower().strip()
-
-    audio_formats = [
-        "aac",
-        "flac",
-        "m4a",
-        "mp3",
-        "wav",
-        "wma"
-    ]
-
-    if target_format.lower() not in audio_formats:
-        raise UnsupportedAudioFormatError(target_format)
-
-    filename, extension = os.path.splitext(os.path.basename(input_path))
-    output_name = str(Path(output_path) / f"{filename}_converted.{target_format}")
-
-    get_options = extract_options(options)
-
-    ffmpeg_command = ["ffmpeg", "-i", input_path]
-
-    for key, value in get_options.items():
-        if key == "audio_codec":
-            if target_format == "flac":
-                ffmpeg_command.extend(["-c:a", "flac"])
-            elif target_format == "wav":
-                ffmpeg_command.extend(["-c:a", "libopus"])
-            elif target_format == "mp3":
-                ffmpeg_command.extend(["-c:a", "libmp3lame"])
-            else:
-                ffmpeg_command.extend(["-c:a", value])
-        elif key == "bitrate":
-            ffmpeg_command.extend(["-b:a", value])
-        elif key == "channel":
-            ffmpeg_command.extend(["-ac", value])
-        elif key == "sample_rates":
-            ffmpeg_command.extend(["-ar", value])
-        elif key == "volume":
-            ffmpeg_command.extend(["-af", f"volume={value}dB"])
-
-    ffmpeg_command.append(output_name)
+    print(codec, bit_rate, sample_rate, channels, volume)
 
     try:
-        subprocess.run(ffmpeg_command)
-        return True
-    except Exception as e:
-        print(f"Error converting {input_path}: {e}")
-        return False
+        (
+            ffmpeg
+            .input(input_file)
+            .output(output_file, acodec=codec, audio_bitrate=bit_rate, ar=sample_rate, ac=channels,
+                    af=f'volume={volume}')
+            .run(overwrite_output=True)
+        )
+        print(f"Conversion successful: {output_file}")
+    except ffmpeg.Error as e:
+        print(f"Error occurred: {e.stderr.decode('utf8')}")
+
+
+# Example usage
+audio_options = {
+    "codec": "aac",
+    "bit_rate": "192k",
+    "sample_rate": 44100,
+    "channels": 2,
+    "volume": 1.0
+}
+convert_audio('input.mp3', 'output.aac', **audio_options)
