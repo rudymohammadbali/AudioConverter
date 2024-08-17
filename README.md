@@ -1,17 +1,34 @@
-# Audio-Tool
+# AudioConverter
 Convert audio files to other audio formats with custom options using ffmpeg.
 
-## Examlpe
+## Example
 ```python
-from audio_tool import audio_converter
+from audio_converter import convert_audio
 
-input_video = "C:\\Users\\usr\\Downloads\\input.mp3"
-output_video = "C:\\Users\\usr\\Downloads"
-output_format = "mp3"
-audio_options = {"audio_codec": "libmp3lame", "bitrate": 192, "channel": "stereo", "sample_rate": "48000", "volume": 0}
+def success_callback(msg: str) -> None:
+    print(msg)
 
-# Usage
-audio_converter(input_video, output_video, output_format, audio_options)
+
+def failure_callback(msg: str) -> None:
+    print(msg)
+
+
+# Example usage
+audio_options = {
+    "codec": "libmp3lame",
+    "bit_rate": "256k",
+    "sample_rate": 48000,
+    "channels": 2,
+    "volume": 1
+}
+convert_audio("input.mp3", 'output.mp3', success_callback, failure_callback, **audio_options)
+```
+
+<h2 align="left">Requirements</h2>
+
+
+```
+pip install ffmpeg-python==0.2.0
 ```
 
 Make sure you have installed ffmpeg on your system! 
